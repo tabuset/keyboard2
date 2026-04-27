@@ -111,6 +111,9 @@
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans p-2 md:p-6 min-h-screen flex flex-col items-center">
 
+    <!-- 追加: Webフォントを確実に読み込ませるための隠し要素 -->
+    <div style="position: absolute; top: -9999px; font-family: 'Noto Music', serif; visibility: hidden;">𝄞 𝄢</div>
+
     <div class="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
         
         <!-- ヘッダーとコントロールパネル -->
@@ -1077,8 +1080,8 @@
             // 音部記号の描画 (Noto Musicフォントを使用して印刷風に)
             // 五線の高さに合わせてサイズを縮小し、位置を調整
             ctx.font = '48px "Noto Music", serif';
-            ctx.fillText('\uD834\uDD1E', 40, getY(39) - 2); // ト音記号 (G4を中心に、少し上に調整)
-            ctx.fillText('\uD834\uDD22', 40, getY(31) + 20); // ヘ音記号 (F3=第4線に点が挟まるようにさらに下に調整)
+            ctx.fillText('𝄞', 40, getY(39) - 2); // ト音記号 (G4を中心に、少し上に調整)
+            ctx.fillText('𝄢', 40, getY(31) + 20); // ヘ音記号 (F3=第4線に点が挟まるようにさらに下に調整)
 
             // --- 調号の描画 ---
             const keySigStr = currentTranspose.toString();
@@ -1169,10 +1172,15 @@
             });
         }
 
-        // フォントが読み込まれたら再描画する（音部記号を正しいフォントで表示するため）
-        document.fonts.ready.then(() => {
-            requestAnimationFrame(drawStaff);
-        });
+        // 追加・変更: フォントが確実に読み込まれたら再描画する（文字化け防止策の強化）
+        if (document.fonts) {
+            document.fonts.load('48px "Noto Music"').then(() => {
+                requestAnimationFrame(drawStaff);
+            });
+            document.fonts.ready.then(() => {
+                requestAnimationFrame(drawStaff);
+            });
+        }
 
         // 初期化実行
         updateSliderUI();
