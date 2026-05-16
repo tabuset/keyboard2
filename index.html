@@ -63,6 +63,22 @@
             transform: translateY(1px);
         }
 
+        /* 追加: 練習モードのターゲット鍵盤の着色と発音エフェクト */
+        .key-white.practice-target {
+            background: linear-gradient(to bottom, #fef08a 0%, #fde047 100%);
+        }
+        .key-black.practice-target {
+            background: linear-gradient(to bottom, #eab308 0%, #a16207 100%);
+        }
+        
+        @keyframes hit-outline {
+            0% { outline: 3px solid #3b82f6; outline-offset: -3px; }
+            100% { outline: 3px solid transparent; outline-offset: -3px; }
+        }
+        .key-white.hit, .key-black.hit {
+            animation: hit-outline 0.4s ease-out;
+        }
+
         .note-label {
             font-size: 0.85rem;
             font-weight: bold;
@@ -189,6 +205,7 @@
                             <option value="hana1">花（武島羽衣作詞 滝廉太郎作曲）１番</option>
                             <option value="hana2">花（武島羽衣作詞 滝廉太郎作曲）２番</option>
                             <option value="hana3">花（武島羽衣作詞 滝廉太郎作曲）３番</option>
+                            <option value="hana_all">花（武島羽衣作詞 滝廉太郎作曲）全曲</option>
                         </select>
                         <button id="btn-practice-start" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-sm shadow transition-colors">スタート</button>
                         <button id="btn-practice-stop" class="px-4 py-2 bg-slate-400 hover:bg-slate-500 text-white rounded font-bold text-sm shadow transition-colors hidden">中断</button>
@@ -297,6 +314,35 @@
                 69, 71, 64, 69, 62,                 // <ラ シ ミ ラ レ
                 62, 62, 67, 68, 69, 71, 72, 74, 76, // レ レ ソ ソ# ラ シ >ド レ ミ
                 74, 74, 69, 71, 67                  // レ レ <ラ シ ソ
+            ],
+            hana_all: [
+                // 1番
+                62, 62, 67, 67, 69, 67, 66, 64, 62, // レ レ ソ ソ ラ ソ ファ# ミ レ
+                59, 62, 67, 69, 71, 74, 69,         // <シ> レ ソ ラ シ >レ <ラ
+                62, 62, 67, 67, 69, 67, 64, 66, 62, // レ レ ソ ソ ラ ソ ミ ファ# レ
+                69, 69, 69, 71, 67,                 // ラ ラ ラ シ ソ
+                74, 74, 74, 71, 72, 72, 72,         // >レ レ レ <シ >ド ド ド
+                69, 71, 64, 69, 62,                 // <ラ シ ミ ラ レ
+                62, 62, 67, 67, 69, 67, 66, 64, 62, // レ レ ソ ソ ラ ソ ファ# ミ レ
+                69, 69, 71, 72, 69, 67,             // ラ ラ シ >ド <ラ ソ
+                // 2番
+                62, 62, 67, 67, 69, 67, 66, 64, 62, // レ レ ソ ソ ラ ソ ファ# ミ レ
+                59, 62, 67, 69, 71, 67, 69,         // <シ> レ ソ ラ シ ソ ラ
+                62, 62, 67, 67, 69, 67, 64, 66, 62, // レ レ ソ ソ ラ ソ ミ ファ# レ
+                69, 69, 69, 71, 67,                 // ラ ラ ラ シ ソ
+                74, 74, 74, 71, 72, 72, 72,         // >レ レ レ <シ >ド ド ド
+                69, 71, 64, 69, 62,                 // <ラ シ ミ ラ レ
+                62, 62, 67, 67, 69, 67, 66, 64, 62, // レ レ ソ ソ ラ ソ ファ# ミ レ
+                69, 69, 71, 72, 69, 67,             // ラ ラ シ >ド <ラ ソ
+                // 3番
+                62, 62, 67, 67, 69, 67, 66, 64, 62, // レ レ ソ ソ ラ ソ ファ# ミ レ
+                59, 62, 67, 69, 71, 74, 69,         // <シ> レ ソ ラ シ >レ <ラ
+                62, 62, 67, 67, 69, 67, 64, 66, 62, // レ レ ソ ソ ラ ソ ミ ファ# レ
+                69, 69, 69, 71, 67,                 // ラ ラ ラ シ ソ
+                74, 74, 74, 71, 72, 72, 72,         // >レ レ レ <シ >ド ド ド
+                69, 71, 64, 69, 62,                 // <ラ シ ミ ラ レ
+                62, 62, 67, 68, 69, 71, 72, 74, 76, // レ レ ソ ソ# ラ シ >ド レ ミ
+                74, 74, 69, 71, 67                  // レ レ <ラ シ ソ
             ]
         };
         const songsLyrics = {
@@ -312,12 +358,25 @@
                 "せ","ん","き","ん","の",
                 "な","が","め","を","な","ー","に","ー","に",
                 "た","と","う","べ","き"
+            ],
+            hana_all: [
+                ..."はるのうらーらーのすーみーだがわのぼりくだーりーのふなびとがかいのしずくもはなとちるながめをなーにーにたとーうべき".split(''),
+                ..."みずやあけーぼーのつーゆーあびてわれにものーいーうさくらぎをみずやゆうぐれてをのべてわれさしまーねーくあおーやぎを".split(''),
+                "に","し","き","お","り","ー","な","ー","す",
+                "ちょ","ー","う","ー","て","い","に",
+                "く","る","れ","ば","の","ー","ぼ","ー","る",
+                "お","ぼ","ろ","づ","き",
+                "げ","に","い","っ","こ","く","も",
+                "せ","ん","き","ん","の",
+                "な","が","め","を","な","ー","に","ー","に",
+                "た","と","う","べ","き"
             ]
         };
         const songsTranspose = {
             hana1: -5, // ト長調
             hana2: -5, // ト長調
-            hana3: -5  // ト長調
+            hana3: -5, // ト長調
+            hana_all: -5 // ト長調
         };
 
         // 音色のプリセット
@@ -447,7 +506,13 @@
             const keyIndex = baseMidi - startNote;
             if (keyIndex >= 0 && keyIndex < numKeys) {
                 const keyEl = document.getElementById(`key-${keyIndex}`);
-                if (keyEl) keyEl.classList.add('active');
+                if (keyEl) {
+                    keyEl.classList.add('active');
+                    // 発音した瞬間に枠線を太くするエフェクト
+                    keyEl.classList.remove('hit');
+                    void keyEl.offsetWidth; // アニメーションをリセットして再トリガー
+                    keyEl.classList.add('hit');
+                }
             }
 
             // 練習モードの判定
@@ -632,6 +697,7 @@
         function updatePracticeUI() {
             // 既存のマークをすべて削除
             document.querySelectorAll('.practice-mark').forEach(el => el.remove());
+            document.querySelectorAll('.practice-target').forEach(el => el.classList.remove('practice-target'));
             if (!isPracticing) return;
 
             const songKey = selectPracticeSong.value;
@@ -648,6 +714,8 @@
                 if (keyIdx >= 0 && keyIdx < numKeys) {
                     const keyEl = document.getElementById(`key-${keyIdx}`);
                     if (keyEl) {
+                        keyEl.classList.add('practice-target'); // 鍵盤自体を黄色に着色
+                        
                         const mark = document.createElement('div');
                         mark.className = 'practice-mark';
                         
