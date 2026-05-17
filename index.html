@@ -92,6 +92,25 @@
             display: block;
         }
 
+        /* 追加: PCキーボードの割り当て表示スタイル */
+        .pc-key-label {
+            position: absolute;
+            top: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            color: #94a3b8; /* slate-400 */
+            font-family: monospace;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .key-black .pc-key-label {
+            color: #64748b; /* slate-500 */
+            top: 2px;
+            font-size: 0.65rem;
+        }
+
         /* 楽曲練習モードのマーク用スタイル */
         .practice-mark {
             position: absolute;
@@ -224,7 +243,7 @@
                 </div>
             </div>
             <p class="text-center text-xs text-slate-500 mt-4">
-                PCキーボード（下段: Z〜M, 上段: Q〜U）または画面タッチ・クリックで演奏できます。
+                PCキーボードで演奏できます。曲に合わせて、画面の鍵盤に小さくキー(Z, X等)が表示されます。
             </p>
         </div>
 
@@ -348,7 +367,6 @@
         const songsLyrics = {
             hana1: "はるのうらーらーのすーみーだがわのぼりくだーりーのふなびとがかいのしずくもはなとちるながめをなーにーにたとーうべき".split(''),
             hana2: "みずやあけーぼーのつーゆーあびてわれにものーいーうさくらぎをみずやゆうぐれてをのべてわれさしまーねーくあおーやぎを".split(''),
-            // 3番は「ちょ」を1音として扱うため、配列を手動で定義します
             hana3: [
                 "に","し","き","お","り","ー","な","ー","す",
                 "ちょ","ー","う","ー","て","い","に",
@@ -387,26 +405,58 @@
             famicom: { type1: 'square', type2: 'square', detune: 0, attack: 0.01, decay: 0.5, sustain: 0.2, release: 0.4, filterFreq: 8000 }
         };
 
-        // PCキーボードのマッピング (Z列がC3~, Q列がC4~)
-        const keyMap = {
-            'z': 0, 's': 1, 'x': 2, 'd': 3, 'c': 4, 'v': 5, 'g': 6, 'b': 7, 'h': 8, 'n': 9, 'j': 10, 'm': 11, ',': 12, 'l': 13, '.': 14, ';': 15, '/': 16,
-            'q': 12, '2': 13, 'w': 14, '3': 15, 'e': 16, 'r': 17, '5': 18, 't': 19, '6': 20, 'y': 21, '7': 22, 'u': 23, 'i': 24, '9': 25, 'o': 26, '0': 27, 'p': 28, '-': 29, '[': 30, '=': 31, ']': 32
-        };
+        let dynamicKeyMap = {};
+        let dynamicReverseKeyMap = {};
 
-        // 調号のデータ定義（五線譜上のYオフセット計算用）
+        // 画面の左端(startNote)または曲の最低音を基準に、Zから順に白鍵、Sから順に黒鍵を割り当てる動的マッピング
+        function buildDynamicKeyMap() {
+            dynamicKeyMap = {};
+            dynamicReverseKeyMap = {};
+            
+            // JIS配列準拠のキーリスト
+            const whiteKeys = ['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', '\\', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '@', '['];
+            const blackKeys = ['s', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', ':', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '^'];
+            
+            let whiteIndex = 0;
+            
+            for (let midi = currentKeyBaseMidi; midi <= MAX_MIDI; midi++) {
+                const noteClass = midi % 12;
+                const isBlack = [1, 3, 6, 8, 10].includes(noteClass);
+                
+                if (!isBlack) {
+                    if (whiteIndex < whiteKeys.length) {
+                        const key = whiteKeys[whiteIndex];
+                        dynamicKeyMap[key] = midi;
+                        dynamicReverseKeyMap[midi] = key.toUpperCase();
+                        whiteIndex++;
+                    } else {
+                        break;
+                    }
+                } else {
+                    const prevWhiteIdx = whiteIndex - 1;
+                    if (prevWhiteIdx >= 0 && prevWhiteIdx < blackKeys.length) {
+                        const key = blackKeys[prevWhiteIdx];
+                        dynamicKeyMap[key] = midi;
+                        dynamicReverseKeyMap[midi] = key.toUpperCase();
+                    }
+                }
+            }
+        }
+
+        // 調号のデータ定義
         const keySignatures = {
-            "0": { type: null, notes: [] }, // C
-            "-5": { type: '#', notes: ['F'] }, // G
-            "2": { type: '#', notes: ['F', 'C'] }, // D
-            "-3": { type: '#', notes: ['F', 'C', 'G'] }, // A
-            "4": { type: '#', notes: ['F', 'C', 'G', 'D'] }, // E
-            "-1": { type: '#', notes: ['F', 'C', 'G', 'D', 'A'] }, // B
-            "-6": { type: '#', notes: ['F', 'C', 'G', 'D', 'A', 'E'] }, // F#
-            "5": { type: 'b', notes: ['B'] }, // F
-            "-2": { type: 'b', notes: ['B', 'E'] }, // Bb
-            "3": { type: 'b', notes: ['B', 'E', 'A'] }, // Eb
-            "-4": { type: 'b', notes: ['B', 'E', 'A', 'D'] }, // Ab
-            "1": { type: 'b', notes: ['B', 'E', 'A', 'D', 'G'] } // Db
+            "0": { type: null, notes: [] },
+            "-5": { type: '#', notes: ['F'] },
+            "2": { type: '#', notes: ['F', 'C'] },
+            "-3": { type: '#', notes: ['F', 'C', 'G'] },
+            "4": { type: '#', notes: ['F', 'C', 'G', 'D'] },
+            "-1": { type: '#', notes: ['F', 'C', 'G', 'D', 'A'] },
+            "-6": { type: '#', notes: ['F', 'C', 'G', 'D', 'A', 'E'] },
+            "5": { type: 'b', notes: ['B'] },
+            "-2": { type: 'b', notes: ['B', 'E'] },
+            "3": { type: 'b', notes: ['B', 'E', 'A'] },
+            "-4": { type: 'b', notes: ['B', 'E', 'A', 'D'] },
+            "1": { type: 'b', notes: ['B', 'E', 'A', 'D', 'G'] }
         };
 
         // ドレミのラベル
@@ -424,7 +474,6 @@
         const canvas = document.getElementById('staff-canvas');
         const ctx = canvas.getContext('2d');
         
-        // スライダーDOM
         const sliderContainer = document.getElementById('range-slider-container');
         const thumbLeft = document.getElementById('range-thumb-left');
         const thumbRight = document.getElementById('range-thumb-right');
@@ -606,7 +655,56 @@
 
                 keyboardContainer.appendChild(key);
             }
+            
+            updateKeyBaseMidi();
+            buildDynamicKeyMap();
             if (isPracticing) updatePracticeUI();
+            updatePCKeyLabels();
+        }
+
+        // 追加: PCキーボードの割り当てを画面に表示する
+        function updatePCKeyLabels() {
+            // 既存のラベルを削除
+            document.querySelectorAll('.pc-key-label').forEach(el => el.remove());
+            
+            for (let i = 0; i < numKeys; i++) {
+                const baseMidi = startNote + i;
+                
+                if (dynamicReverseKeyMap.hasOwnProperty(baseMidi)) {
+                    const keyEl = document.getElementById(`key-${i}`);
+                    if (keyEl) {
+                        const label = document.createElement('div');
+                        label.className = 'pc-key-label';
+                        label.innerText = dynamicReverseKeyMap[baseMidi];
+                        keyEl.appendChild(label);
+                    }
+                }
+            }
+        }
+
+        // 追加・変更: 練習モードに合わせてPCキーボードの基準位置を動的に変更
+        function updateKeyBaseMidi() {
+            if (isPracticing && practiceSongData.length > 0) {
+                let reqMin = 127;
+                practiceSongData.forEach(note => {
+                    const targetMidi = note - currentTranspose - (octaveShift * 12);
+                    if (targetMidi < reqMin) reqMin = targetMidi;
+                });
+                
+                // 曲の最低音を含む白鍵を物理キーの左端(Zキー)に割り当てる
+                let baseMidi = reqMin;
+                if ([1, 3, 6, 8, 10].includes(baseMidi % 12)) {
+                    baseMidi--;
+                }
+                currentKeyBaseMidi = baseMidi;
+            } else {
+                // 自由演奏時は画面左端の白鍵をZキーの基準とする
+                let baseMidi = startNote;
+                if ([1, 3, 6, 8, 10].includes(baseMidi % 12)) {
+                    baseMidi--;
+                }
+                currentKeyBaseMidi = baseMidi;
+            }
         }
 
         // --- 練習モードの処理 ---
@@ -637,7 +735,6 @@
         function checkAndExpandRangeForPractice() {
             if (!isPracticing || practiceSongData.length === 0) return;
             
-            // 現在の曲のメロディデータから、必要な最低音と最高音を動的に計算する
             let reqMin = 127;
             let reqMax = 0;
             practiceSongData.forEach(note => {
@@ -646,17 +743,35 @@
                 if (targetMidi > reqMax) reqMax = targetMidi;
             });
 
-            if (startNote > reqMin || endNote < reqMax) {
-                startNote = Math.min(startNote, reqMin - 4);
-                endNote = Math.max(endNote, reqMax + 5);
-                // MIDI規格の範囲内に収める
-                startNote = Math.max(MIN_MIDI, startNote);
-                endNote = Math.min(MAX_MIDI, endNote);
+            // 必要な音域が現在の表示範囲内に収まっていない場合のみ広げる（狭くはしない）
+            let newStartNote = startNote;
+            let newEndNote = endNote;
+            let changed = false;
+
+            if (reqMin < newStartNote) {
+                newStartNote = reqMin;
+                if ([1, 3, 6, 8, 10].includes(newStartNote % 12)) newStartNote--;
+                changed = true;
+            }
+            if (reqMax > newEndNote) {
+                newEndNote = reqMax;
+                changed = true;
+            }
+
+            if (changed) {
+                newStartNote = Math.max(MIN_MIDI, newStartNote);
+                newEndNote = Math.min(MAX_MIDI, newEndNote);
+                
+                startNote = newStartNote;
+                endNote = newEndNote;
                 numKeys = endNote - startNote + 1;
                 updateSliderUI();
-                createKeyboard(); // 内部で updatePracticeUI も呼ばれる
+                createKeyboard(); // 内部で updateKeyBaseMidi, buildDynamicKeyMap, updatePCKeyLabels が呼ばれる
             } else {
+                updateKeyBaseMidi();
+                buildDynamicKeyMap();
                 updatePracticeUI();
+                updatePCKeyLabels();
             }
         }
 
@@ -683,6 +798,9 @@
             btnPracticeStop.classList.add('hidden');
             practiceStatus.innerText = '';
             updatePracticeUI(); // マーク消去
+            updateKeyBaseMidi(); // PCキーボードの割り当てを元に戻す
+            buildDynamicKeyMap();
+            updatePCKeyLabels();
         }
 
         function finishPractice() {
@@ -691,6 +809,9 @@
             btnPracticeStop.classList.add('hidden');
             practiceStatus.innerText = 'クリア！おめでとうございます！';
             updatePracticeUI();
+            updateKeyBaseMidi(); // PCキーボードの割り当てを元に戻す
+            buildDynamicKeyMap();
+            updatePCKeyLabels();
             playApplause();
         }
 
@@ -996,13 +1117,12 @@
         keyboardContainer.addEventListener('touchend', handleTouchEnd, { passive: false });
         keyboardContainer.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
-        // PCキーボードイベント
+        // PCキーボードイベント (動的マッピングを使用)
         window.addEventListener('keydown', (e) => {
             if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
             const key = e.key.toLowerCase();
-            if (keyMap.hasOwnProperty(key)) {
-                // PCのキーボードは C3(48) を基準として動作
-                const baseMidi = 48 + keyMap[key];
+            if (dynamicKeyMap.hasOwnProperty(key)) {
+                const baseMidi = dynamicKeyMap[key];
                 if (baseMidi >= MIN_MIDI && baseMidi <= MAX_MIDI) {
                     initAudio();
                     noteOn(baseMidi);
@@ -1012,8 +1132,8 @@
 
         window.addEventListener('keyup', (e) => {
             const key = e.key.toLowerCase();
-            if (keyMap.hasOwnProperty(key)) {
-                const baseMidi = 48 + keyMap[key];
+            if (dynamicKeyMap.hasOwnProperty(key)) {
+                const baseMidi = dynamicKeyMap[key];
                 noteOff(baseMidi);
             }
         });
