@@ -229,7 +229,7 @@
                         <button id="btn-practice-start" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-sm shadow transition-colors">スタート</button>
                         <button id="btn-practice-stop" class="px-4 py-2 bg-slate-400 hover:bg-slate-500 text-white rounded font-bold text-sm shadow transition-colors hidden">中断</button>
                     </div>
-                    <div class="flex items-center gap-4 text-sm text-slate-700 mb-1">
+                    <div class="flex items-center gap-4 text-sm text-slate-700 mb-1 flex-wrap">
                         <label class="flex items-center cursor-pointer">
                             <input type="checkbox" id="practice-show-next" checked class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
                             <span class="ms-2 font-medium">次の音(◯)を表示</span>
@@ -237,6 +237,10 @@
                         <label class="flex items-center cursor-pointer">
                             <input type="checkbox" id="practice-show-lyrics" checked class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
                             <span class="ms-2 font-medium">歌詞を表示</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="practice-original-mode" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                            <span class="ms-2 font-medium">オリジナルモード(原曲調)</span>
                         </label>
                     </div>
                     <p id="practice-status" class="text-xs text-blue-600 font-medium h-4"></p>
@@ -714,14 +718,22 @@
         const practiceStatus = document.getElementById('practice-status');
         const checkboxShowNext = document.getElementById('practice-show-next');
         const checkboxShowLyrics = document.getElementById('practice-show-lyrics');
+        const checkboxOriginalMode = document.getElementById('practice-original-mode');
 
         // 曲が選択されたときに、自動的にその曲の調に移調する
         function applySongTranspose(songKey) {
             if (!songKey) return;
-            const targetTranspose = songsTranspose[songKey];
+            let targetTranspose = songsTranspose[songKey];
+            
+            // オリジナルモードがONの場合は、移調せず原曲の調（トランスポーズ0）で弾く
+            if (checkboxOriginalMode.checked) {
+                targetTranspose = 0;
+            }
+            
             if (targetTranspose !== undefined && currentTranspose !== targetTranspose) {
                 transposeSelect.value = targetTranspose.toString();
-                transposeSelect.dispatchEvent(new Event('change'));
+                // 変更: プログラムによる自動変更であることを伝えるために CustomEvent を使用
+                transposeSelect.dispatchEvent(new CustomEvent('change', { detail: { isAuto: true } }));
             }
         }
 
@@ -731,6 +743,11 @@
 
         checkboxShowNext.addEventListener('change', () => { if(isPracticing) updatePracticeUI(); });
         checkboxShowLyrics.addEventListener('change', () => { if(isPracticing) updatePracticeUI(); });
+        
+        checkboxOriginalMode.addEventListener('change', () => {
+            const songKey = selectPracticeSong.value;
+            if (songKey) applySongTranspose(songKey);
+        });
 
         function checkAndExpandRangeForPractice() {
             if (!isPracticing || practiceSongData.length === 0) return;
@@ -1143,8 +1160,26 @@
         
         transposeSelect.addEventListener('change', (e) => {
             currentTranspose = parseInt(e.target.value, 10);
+            
+            // 追加: フラット系の調なら自動的にフラット表記にする
+            const flatKeys = [5, -2, 3, -4, 1]; // F, Bb, Eb, Ab, Db
+            if (flatKeys.includes(currentTranspose)) {
+                preferFlat = true;
+                const flatRadio = document.querySelector('input[name="accidental"][value="flat"]');
+                if (flatRadio) flatRadio.checked = true;
+            } else {
+                preferFlat = false;
+                const sharpRadio = document.querySelector('input[name="accidental"][value="sharp"]');
+                if (sharpRadio) sharpRadio.checked = true;
+            }
+
+            // ユーザーが手動で移調を変更した場合は、オリジナルモードのチェックを外す
+            if (!e.detail || !e.detail.isAuto) {
+                checkboxOriginalMode.checked = false;
+            }
+
             requestAnimationFrame(drawStaff);
-            if (isPracticing) checkAndExpandRangeForPractice(); // 追加: 移調変更時もマーク位置を更新
+            if (isPracticing) checkAndExpandRangeForPractice(); // 移調変更時もマーク位置を更新
         });
 
         showLabelsCheckbox.addEventListener('change', (e) => {
@@ -1199,26 +1234,44 @@
         // MIDIノートから白鍵インデックス(C0=0)と臨時記号を取得
         function getNoteDrawInfo(midiNote, useFlat) {
             const octave = Math.floor(midiNote / 12);
-            const noteClass = midiNote % 12;
+            const midiClass = midiNote % 12;
 
-            const sharpMap = [
-                { w: 0, a: null }, { w: 0, a: '#' }, { w: 1, a: null }, { w: 1, a: '#' },
-                { w: 2, a: null }, { w: 3, a: null }, { w: 3, a: '#' }, { w: 4, a: null },
-                { w: 4, a: '#' }, { w: 5, a: null }, { w: 5, a: '#' }, { w: 6, a: null }
-            ];
-            const flatMap = [
-                { w: 0, a: null }, { w: 1, a: 'b' }, { w: 1, a: null }, { w: 2, a: 'b' },
-                { w: 2, a: null }, { w: 3, a: null }, { w: 4, a: 'b' }, { w: 4, a: null },
-                { w: 5, a: 'b' }, { w: 5, a: null }, { w: 6, a: 'b' }, { w: 6, a: null }
-            ];
+            const sharpWMap = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+            const flatWMap = [0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6];
 
-            const mapInfo = useFlat ? flatMap[noteClass] : sharpMap[noteClass];
-            const absoluteWhiteIdx = octave * 7 + mapInfo.w;
+            const w = useFlat ? flatWMap[midiClass] : sharpWMap[midiClass];
+            const noteNames = ['C','D','E','F','G','A','B'];
+            const noteName = noteNames[w];
+
+            // 調号のシフトを計算
+            const keySigStr = currentTranspose.toString();
+            const keySigData = keySignatures[keySigStr];
+            let keySigShift = 0;
+            if (keySigData && keySigData.type === '#') {
+                if (keySigData.notes.includes(noteName)) keySigShift = 1;
+            } else if (keySigData && keySigData.type === 'b') {
+                if (keySigData.notes.includes(noteName)) keySigShift = -1;
+            }
+
+            const isBlack = [1, 3, 6, 8, 10].includes(midiClass);
+            let acc = null;
+            
+            if (isBlack) {
+                // 変更: 黒鍵は常に臨時記号を表示する
+                acc = useFlat ? 'b' : '#';
+            } else {
+                // 変更: 白鍵は、調号で変化が指定されている場合のみナチュラルを表示する
+                if (keySigShift !== 0) {
+                    acc = '♮';
+                }
+            }
+
+            const absoluteWhiteIdx = octave * 7 + w;
             
             return {
                 idx: absoluteWhiteIdx,
-                acc: mapInfo.a,
-                noteName: ['C','D','E','F','G','A','B'][mapInfo.w]
+                acc: acc,
+                noteName: noteName
             };
         }
 
@@ -1322,8 +1375,13 @@
                 // 臨時記号の描画
                 if (info.acc) {
                     ctx.font = '24px serif';
-                    const sym = info.acc === '#' ? '♯' : '♭';
-                    ctx.fillText(sym, x - 18, y + (info.acc === '#' ? 2 : -2));
+                    let sym = '';
+                    let yOffset = 0;
+                    if (info.acc === '#') { sym = '♯'; yOffset = 2; }
+                    else if (info.acc === 'b') { sym = '♭'; yOffset = -2; }
+                    else if (info.acc === '♮') { sym = '♮'; yOffset = 0; }
+                    
+                    ctx.fillText(sym, x - 18, y + yOffset);
                 }
 
                 // 符頭の描画 (黒丸)
@@ -1371,6 +1429,7 @@
         }
 
         // 初期化実行
+        updateKeyBaseMidi();
         updateSliderUI();
         createKeyboard();
         resizeCanvas();
